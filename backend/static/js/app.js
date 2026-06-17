@@ -1,5 +1,6 @@
 let token = localStorage.getItem("library_token");
 let currentUser = JSON.parse(localStorage.getItem("library_user") || "null");
+let editingBookId = null;
 
 const loginSection = document.getElementById("loginSection");
 const mainApp = document.getElementById("mainApp");
@@ -156,6 +157,7 @@ async function loadBooks() {
 
         response.data.books.forEach(book => {
             const canBorrow = token && book.available_copies > 0;
+            const canEditBook = currentUser && (currentUser.role === "admin" || currentUser.role === "librarian");
             const canDeleteBook = currentUser && currentUser.role === "admin";
 
             booksTable.innerHTML += `
@@ -171,7 +173,10 @@ async function loadBooks() {
                     ? `<button class="btn small primary" onclick="borrowBook(${book.id})">Borrow</button>`
                     : `<span class="muted">Unavailable</span>`
                 }
-
+                        ${canEditBook
+                    ? `<button class="btn small" onclick="editBook(${book.id})">Edit</button>`
+                    : ""
+                }
                         ${canDeleteBook
                     ? `<button class="btn small danger" onclick="deleteBook(${book.id})">Delete</button>`
                     : ""
@@ -186,37 +191,112 @@ async function loadBooks() {
     }
 }
 
-async function addBook() {
+function getBookFormData() {
+    const publicationYearValue = document.getElementById("newYear").value;
+    const copiesValue = document.getElementById("newCopies").value;
+
     const book = {
         isbn: document.getElementById("newIsbn").value.trim(),
         title: document.getElementById("newTitle").value.trim(),
         author: document.getElementById("newAuthor").value.trim(),
         genre: document.getElementById("newGenre").value.trim(),
-        publication_year: Number(document.getElementById("newYear").value),
-        total_copies: Number(document.getElementById("newCopies").value || 1)
+        total_copies: Number(copiesValue || 1)
     };
 
+    if (publicationYearValue) {
+        book.publication_year = Number(publicationYearValue);
+    }
+
+    return book;
+}
+
+
+function clearBookForm() {
+    document.getElementById("newIsbn").value = "";
+    document.getElementById("newTitle").value = "";
+    document.getElementById("newAuthor").value = "";
+    document.getElementById("newGenre").value = "";
+    document.getElementById("newYear").value = "";
+    document.getElementById("newCopies").value = "";
+
+    editingBookId = null;
+
+    document.getElementById("bookFormTitle").textContent = "Add New Book";
+    document.getElementById("saveBookButton").textContent = "Add Book";
+    document.getElementById("cancelEditButton").classList.add("hidden");
+}
+
+
+async function saveBook() {
+    const book = getBookFormData();
+
+    if (!book.title || !book.author) {
+        showMessage("addBookMessage", "Title and author are required", "error");
+        return;
+    }
+
     try {
-        await apiRequest("/api/books", {
-            method: "POST",
-            body: JSON.stringify(book)
-        });
+        if (editingBookId) {
+            await apiRequest(`/api/books/${editingBookId}`, {
+                method: "PUT",
+                body: JSON.stringify(book)
+            });
 
-        showMessage("addBookMessage", "Book added successfully", "success");
+            showMessage("addBookMessage", "Book updated successfully", "success");
 
-        document.getElementById("newIsbn").value = "";
-        document.getElementById("newTitle").value = "";
-        document.getElementById("newAuthor").value = "";
-        document.getElementById("newGenre").value = "";
-        document.getElementById("newYear").value = "";
-        document.getElementById("newCopies").value = "";
+        } else {
+            await apiRequest("/api/books", {
+                method: "POST",
+                body: JSON.stringify(book)
+            });
 
+            showMessage("addBookMessage", "Book added successfully", "success");
+        }
+
+        clearBookForm();
         loadBooks();
-        loadStats();
+
+        if (currentUser.role === "admin" || currentUser.role === "librarian") {
+            loadStats();
+        }
 
     } catch (error) {
         showMessage("addBookMessage", error.message, "error");
     }
+}
+
+
+async function editBook(bookId) {
+    try {
+        const response = await apiRequest(`/api/books/${bookId}`);
+        const book = response.data;
+
+        editingBookId = book.id;
+
+        document.getElementById("newIsbn").value = book.isbn || "";
+        document.getElementById("newTitle").value = book.title || "";
+        document.getElementById("newAuthor").value = book.author || "";
+        document.getElementById("newGenre").value = book.genre || "";
+        document.getElementById("newYear").value = book.publication_year || "";
+        document.getElementById("newCopies").value = book.total_copies || 1;
+
+        document.getElementById("bookFormTitle").textContent = "Edit Book";
+        document.getElementById("saveBookButton").textContent = "Update Book";
+        document.getElementById("cancelEditButton").classList.remove("hidden");
+
+        document.getElementById("addBookSection").scrollIntoView({
+            behavior: "smooth"
+        });
+
+    } catch (error) {
+        alert(error.message);
+    }
+}
+
+
+function cancelBookEdit() {
+    clearBookForm();
+    showMessage("addBookMessage", "Edit cancelled", "success");
 }
 
 async function borrowBook(bookId) {
