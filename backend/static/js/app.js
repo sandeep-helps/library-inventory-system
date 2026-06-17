@@ -156,6 +156,7 @@ async function loadBooks() {
 
         response.data.books.forEach(book => {
             const canBorrow = token && book.available_copies > 0;
+            const canDeleteBook = currentUser && currentUser.role === "admin";
 
             booksTable.innerHTML += `
                 <tr>
@@ -165,10 +166,15 @@ async function loadBooks() {
                     <td>${book.genre || "-"}</td>
                     <td>${book.total_copies}</td>
                     <td>${book.available_copies}</td>
-                    <td>
+                    <td class="action-buttons">
                         ${canBorrow
                     ? `<button class="btn small primary" onclick="borrowBook(${book.id})">Borrow</button>`
                     : `<span class="muted">Unavailable</span>`
+                }
+
+                        ${canDeleteBook
+                    ? `<button class="btn small danger" onclick="deleteBook(${book.id})">Delete</button>`
+                    : ""
                 }
                     </td>
                 </tr>
@@ -230,6 +236,31 @@ async function borrowBook(bookId) {
         if (currentUser.role === "admin" || currentUser.role === "librarian") {
             loadStats();
             loadAllLoans();
+        }
+
+    } catch (error) {
+        alert(error.message);
+    }
+}
+
+async function deleteBook(bookId) {
+    const confirmed = confirm("Are you sure you want to delete this book?");
+
+    if (!confirmed) {
+        return;
+    }
+
+    try {
+        await apiRequest(`/api/books/${bookId}`, {
+            method: "DELETE"
+        });
+
+        alert("Book deleted successfully");
+
+        loadBooks();
+
+        if (currentUser.role === "admin" || currentUser.role === "librarian") {
+            loadStats();
         }
 
     } catch (error) {
@@ -313,9 +344,12 @@ async function loadUsers() {
         const response = await apiRequest("/api/users");
         const table = document.getElementById("usersTable");
 
+
         table.innerHTML = "";
 
         response.data.users.forEach(user => {
+            const isCurrentUser = currentUser && user.id === currentUser.id;
+
             table.innerHTML += `
                 <tr>
                     <td>${user.id}</td>
@@ -328,6 +362,12 @@ async function loadUsers() {
                             <option value="librarian">librarian</option>
                             <option value="admin">admin</option>
                         </select>
+                    </td>
+                    <td>
+                        ${isCurrentUser
+                    ? `<span class="muted">Current user</span>`
+                    : `<button class="btn small danger" onclick="deleteUser(${user.id})">Delete</button>`
+                }
                     </td>
                 </tr>
             `;
@@ -351,6 +391,28 @@ async function changeUserRole(userId, role) {
 
         alert("User role updated successfully");
         loadUsers();
+
+    } catch (error) {
+        alert(error.message);
+    }
+}
+
+async function deleteUser(userId) {
+    const confirmed = confirm("Are you sure you want to delete this user?");
+
+    if (!confirmed) {
+        return;
+    }
+
+    try {
+        await apiRequest(`/api/users/${userId}`, {
+            method: "DELETE"
+        });
+
+        alert("User deleted successfully");
+
+        loadUsers();
+        loadStats();
 
     } catch (error) {
         alert(error.message);
