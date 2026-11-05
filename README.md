@@ -4,7 +4,7 @@ A database-backed **Library Inventory and Loan Management System** built with **
 
 The system supports CRUD operations, book search and filtering, role-based user actions, borrowing and returning books, dashboard statistics, a simple frontend UI, and automated testing.
 
----
+--
 
 ## Features
 
